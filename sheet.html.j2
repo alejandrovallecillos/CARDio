@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>CARDio</title>
+<style>{{ css | safe }}</style>
+</head>
+<body>
+
+<!-- Símbolo de cono reutilizable en todas las cartas de tipo "ruta" -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="cono" viewBox="0 0 24 24">
+      <path d="M12 2 L18 19 L6 19 Z" />
+      <rect x="4.5" y="19" width="15" height="2.6" rx="1" />
+    </symbol>
+  </defs>
+</svg>
+
+{% for hoja in hojas %}
+  <div class="hoja">
+    {% for carta in hoja %}
+    <div class="carta carta--{{ carta.tipo }}" style="--accent: {{ carta.color }}; --accent-light: {{ carta.color_claro }};">
+      <div class="carta__cabecera">
+        <div class="carta__numero">{{ carta.id }}</div>
+        <div class="carta__icono-mini">{{ carta.insignia_svg | safe }}</div>
+        {% if carta.tipo == 'ruta' %}
+        <div class="carta__titulo">{{ carta.categoria_label }}</div>
+        {% endif %}
+      </div>
+
+      <div class="carta__cuerpo">
+        {% if carta.tipo == 'ruta' %}
+          <div class="carta__dibujo">
+            <svg viewBox="0 0 100 100">
+              {% for trayecto in carta.trayectos %}
+              <polyline class="ruta-linea" points="{% for p in trayecto %}{{ p[0] }},{{ p[1] }} {% endfor %}" />
+              {% endfor %}
+              {% for p in carta.puntos_guia %}
+              <use class="ruta-cono--guia" href="#cono" transform="translate({{ p[0] }} {{ p[1] }}) scale(0.16) translate(-12,-12)" />
+              {% endfor %}
+              {% for trayecto in carta.trayectos %}
+              {% for p in trayecto %}
+              <use class="ruta-cono" href="#cono" transform="translate({{ p[0] }} {{ p[1] }}) scale(0.19) translate(-12,-12)" />
+              {% endfor %}
+              {% endfor %}
+            </svg>
+          </div>
+
+        {% elif carta.tipo == 'imagen' %}
+          <img class="carta__imagen" src="{{ carta.imagen_path }}" alt="{{ carta.titulo }}">
+          {% if carta.titulo %}<div class="carta__titulo-regla">{{ carta.titulo }}</div>{% endif %}
+          {% if carta.descripcion %}<div class="carta__descripcion">{{ carta.descripcion }}</div>{% endif %}
+
+        {% else %} {# tipo == 'regla' (icono + texto) #}
+          <div class="carta__icono-grande">{{ carta.icono_svg | safe }}</div>
+          <div class="carta__titulo-regla">{{ carta.titulo }}</div>
+          <div class="carta__descripcion">{{ carta.descripcion }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    {% for _ in range(6 - hoja|length) %}
+    <div class="carta" style="border-style: dashed; opacity: 0.2; background: white;"></div>
+    {% endfor %}
+  </div>
+{% endfor %}
+</body>
+</html>
