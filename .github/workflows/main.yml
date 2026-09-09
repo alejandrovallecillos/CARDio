@@ -1,0 +1,50 @@
+name: Generar cartas CARRDS
+
+on:
+  push:
+    paths:
+      - "data/**"
+      - "templates/**"
+      - "assets/**"
+      - "scripts/**"
+  workflow_dispatch: {}   # también se puede lanzar a mano desde la pestaña "Actions"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Generar un PDF por cada contenido (carpeta dentro de data/)
+        run: |
+          for carpeta in data/*/; do
+            contenido=$(basename "$carpeta")
+            echo "Generando mazo: $contenido"
+            python scripts/generate.py "$contenido"
+          done
+
+      - name: Subir los PDFs como archivo descargable del workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: cartas-carrds
+          path: output/*.pdf
+
+      - name: Guardar los PDFs generados en el repositorio
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Actualiza los PDFs de cartas generados automáticamente"
+          file_pattern: "output/*.pdf"
