@@ -1,4 +1,4 @@
-# CARRDS 🃏
+# CARDio 🃏
 
 Generador automático de cartas educativas para Educación Física (orientación,
 deportes, condición física, nutrición...). Defines cada carta en un archivo de
