@@ -1,4 +1,4 @@
-name: Generar cartas CARRDS
+name: Generar cartas CARDio
 
 on:
   push:
