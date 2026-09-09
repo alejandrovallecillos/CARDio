@@ -1,0 +1,164 @@
+/* ============================================================
+   CARRDS - Estilos de la hoja A4 y de la carta individual
+   Cambia aquí el diseño general; las cartas heredan todo esto.
+   ============================================================ */
+
+@page {
+  size: A4;
+  margin: 8mm;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  color: #1f2a1f;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.hoja {
+  width: 194mm;   /* A4 (210mm) menos márgenes de @page */
+  height: 281mm;  /* A4 (297mm) menos márgenes de @page */
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(3, 1fr);
+  gap: 4mm;
+  page-break-after: always;
+}
+
+.hoja:last-child {
+  page-break-after: auto;
+}
+
+.carta {
+  --accent: #3f7d3f; /* se sobreescribe por carta según su categoría */
+  border: 2.5px solid var(--accent);
+  border-radius: 6mm;
+  padding: 5mm;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.carta__cabecera {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  margin-bottom: 3mm;
+}
+
+.carta__numero {
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
+  font-size: 3.6mm;
+  border-radius: 2mm;
+  padding: 1mm 2.5mm;
+  letter-spacing: 0.3px;
+}
+
+.carta__icono-mini {
+  width: 5mm;
+  height: 5mm;
+  border: 1.4px solid var(--accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.carta__icono-mini svg {
+  width: 3.2mm;
+  height: 3.2mm;
+}
+.carta__icono-mini svg, .carta__icono-mini svg * {
+  fill: var(--accent);
+}
+
+.carta__titulo {
+  font-size: 3.6mm;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #222;
+  margin-left: auto;
+  text-align: right;
+}
+
+.carta__cuerpo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3mm;
+  text-align: center;
+}
+
+/* --- Tipo "ruta": dibujo de puntos y líneas --- */
+.carta__dibujo {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.carta__dibujo svg {
+  width: 90%;
+  height: 90%;
+}
+.ruta-linea {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ruta-punto {
+  fill: var(--accent);
+}
+.ruta-punto--guia {
+  fill: #8a8a8a;
+}
+
+/* --- Tipo "regla": icono grande + título + descripción --- */
+.carta__icono-grande {
+  width: 22mm;
+  height: 22mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.carta__icono-grande svg {
+  width: 100%;
+  height: 100%;
+}
+.carta__icono-grande svg, .carta__icono-grande svg * {
+  stroke: var(--accent);
+  fill: none;
+}
+.carta__titulo-regla {
+  font-size: 4.2mm;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.carta__descripcion {
+  font-size: 3mm;
+  line-height: 1.35;
+  color: #333;
+  max-width: 90%;
+}
+
+/* --- Tipo "imagen": foto o ilustración libre --- */
+.carta__imagen {
+  max-width: 85%;
+  max-height: 100%;
+  object-fit: contain;
+}

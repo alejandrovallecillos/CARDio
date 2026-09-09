@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>CARRDS</title>
+<style>{{ css | safe }}</style>
+</head>
+<body>
+{% for hoja in hojas %}
+  <div class="hoja">
+    {% for carta in hoja %}
+    <div class="carta" style="--accent: {{ carta.color }};">
+      <div class="carta__cabecera">
+        <div class="carta__numero">{{ carta.id }}</div>
+        <div class="carta__icono-mini">{{ carta.insignia_svg | safe }}</div>
+        {% if carta.tipo == 'ruta' %}
+        <div class="carta__titulo">{{ carta.categoria_label }}</div>
+        {% endif %}
+      </div>
+
+      <div class="carta__cuerpo">
+        {% if carta.tipo == 'ruta' %}
+          <div class="carta__dibujo">
+            <svg viewBox="0 0 100 100">
+              {% for trayecto in carta.trayectos %}
+              <polyline class="ruta-linea" points="{% for p in trayecto %}{{ p[0] }},{{ p[1] }} {% endfor %}" />
+              {% for p in trayecto %}
+              <circle class="ruta-punto" cx="{{ p[0] }}" cy="{{ p[1] }}" r="2.6" />
+              {% endfor %}
+              {% endfor %}
+              {% for p in carta.puntos_guia %}
+              <circle class="ruta-punto--guia" cx="{{ p[0] }}" cy="{{ p[1] }}" r="1.8" />
+              {% endfor %}
+            </svg>
+          </div>
+
+        {% elif carta.tipo == 'imagen' %}
+          <img class="carta__imagen" src="{{ carta.imagen_path }}" alt="{{ carta.titulo }}">
+          {% if carta.titulo %}<div class="carta__titulo-regla">{{ carta.titulo }}</div>{% endif %}
+          {% if carta.descripcion %}<div class="carta__descripcion">{{ carta.descripcion }}</div>{% endif %}
+
+        {% else %} {# tipo == 'regla' (icono + texto) #}
+          <div class="carta__icono-grande">{{ carta.icono_svg | safe }}</div>
+          <div class="carta__titulo-regla">{{ carta.titulo }}</div>
+          <div class="carta__descripcion">{{ carta.descripcion }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    {# Rellena huecos si la última hoja tiene menos de 6 cartas, para que el grid no se descuadre #}
+    {% for _ in range(6 - hoja|length) %}
+    <div class="carta" style="border-style: dashed; opacity: 0.25;"></div>
+    {% endfor %}
+  </div>
+{% endfor %}
+</body>
+</html>

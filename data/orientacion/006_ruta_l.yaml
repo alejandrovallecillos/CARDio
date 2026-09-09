@@ -1,0 +1,14 @@
+id: "006"
+contenido: orientacion
+color: "#3f7d3f"
+tipo: ruta
+categoria_label: "RUTA ESPACIAL"
+
+# Cada elemento de "trayectos" es un camino conectado (una polilínea).
+# Los puntos van en un lienzo virtual de 0 a 100 (tanto en X como en Y).
+trayectos:
+  - [[30,10],[60,10],[60,45],[85,45],[85,80],[30,80],[30,10]]
+
+# Puntos de referencia sueltos, no conectados (aparecen como puntos grises).
+puntos_guia:
+  - [15,18]

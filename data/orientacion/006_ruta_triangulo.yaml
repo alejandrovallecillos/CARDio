@@ -1,0 +1,13 @@
+id: "006"
+contenido: orientacion
+color: "#3f7d3f"
+tipo: ruta
+categoria_label: "RUTA ESPACIAL"
+
+trayectos:
+  - [[15,20],[15,80],[85,80],[15,20]]
+
+puntos_guia:
+  - [50,20]
+  - [85,20]
+  - [85,50]
