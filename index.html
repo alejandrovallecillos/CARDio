@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>CARDio v0.6 — Generador de cartas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f5f1;
+    --panel: #ffffff;
+    --ink: #1c231c;
+    --ink-soft: #5b645b;
+    --line: #dfe2dc;
+    --accent-app: #2d6e4e;
+    --w-izq: 240px;
+    --w-der: 360px;
+  }
+  * { box-sizing: border-box; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .resizer { flex: 0 0 6px; cursor: col-resize; background: var(--line); position: relative; z-index: 5; }
+  .resizer:hover, .resizer.activo { background: var(--accent-app); }
+
+  #contenidos {
+    flex: 0 0 var(--w-izq);
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 54px;
+    overflow: hidden;
+  }
+  #marca { display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-shrink:0; position:relative; }
+  #logo-app { width:26px; height:26px; flex-shrink:0; border-radius:6px; cursor:pointer; }
+  #logo-app.mascara { -webkit-mask-repeat:no-repeat; -webkit-mask-size:contain; -webkit-mask-position:center; mask-repeat:no-repeat; mask-size:contain; mask-position:center; }
+  #logo-app img { width:100%; height:100%; object-fit:contain; display:block; }
+  #marca span.titulo { font-size:17px; font-weight:800; letter-spacing:0.2px; white-space:nowrap; }
+  #input-logo { display:none; }
+  #btn-colapsar-izq { margin-left:auto; border:none; background:none; cursor:pointer; color:var(--ink-soft); font-size:15px; padding:2px 4px; flex-shrink:0; }
+  #contenidos.colapsada { flex-basis: 54px !important; padding: 16px 8px; }
+  #contenidos.colapsada #marca span.titulo,
+  #contenidos.colapsada .contenido-item .nombre,
+  #contenidos.colapsada .contenido-item .contar,
+  #contenidos.colapsada .subcarpeta-lista,
+  #contenidos.colapsada .subcarpeta-nueva,
+  #contenidos.colapsada #nuevo-contenido,
+  #contenidos.colapsada #pie-marca { display:none !important; }
+  #contenidos.colapsada .contenido-item { justify-content:center; padding:7px 0; }
+
+  #lista-scroll { flex:1; overflow-y:auto; overflow-x:hidden; min-height:0; }
+  .contenido-item { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; cursor: pointer; font-size: 13.5px; margin-bottom: 1px; }
+  .contenido-item:hover { background: #f0efe9; }
+  .contenido-item.activo { background: #eef3ec; font-weight: 700; }
+  .contenido-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; border:1px solid rgba(0,0,0,0.1); }
+  .contenido-item .nombre { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .contenido-item .contar { margin-left: auto; color: var(--ink-soft); font-size: 11px; }
+  .btn-borrar-mini { border:none; background:none; cursor:pointer; color:#b95; font-size:11px; padding:0 2px; opacity:0.55; flex-shrink:0; }
+  .btn-borrar-mini:hover { opacity:1; color:#a33; }
+
+  .subcarpeta-lista { margin: 2px 0 8px 21px; }
+  .subcarpeta-item { display:flex; align-items:center; gap:6px; padding:5px 7px; border-radius:6px; cursor:pointer; font-size:12px; color: var(--ink-soft); }
+  .subcarpeta-item:hover { background:#f2f2ee; }
+  .subcarpeta-item.activa { background:#e3ede3; color: var(--ink); font-weight:700; }
+  .subcarpeta-nueva { display:flex; gap:4px; margin: 3px 0 6px 21px; }
+  .subcarpeta-nueva input { flex:1; min-width:0; font-size:11.5px; padding:4px 6px; border:1px solid var(--line); border-radius:5px; }
+  .subcarpeta-nueva button { border:none; background:#dfe6df; border-radius:5px; padding:0 8px; cursor:pointer; font-size:13px; }
+
+  #nuevo-contenido { margin-top: 10px; display: flex; gap: 6px; flex-shrink:0; }
+  #nuevo-contenido input { flex: 1; min-width: 0; font-size: 12.5px; padding: 6px 7px; border: 1px solid var(--line); border-radius: 6px; }
+  #nuevo-contenido button { border: none; background: var(--accent-app); color: white; border-radius: 6px; padding: 0 10px; cursor: pointer; font-size: 15px; }
+  #pie-marca { flex-shrink:0; padding-top:12px; margin-top:10px; border-top:1px solid var(--line); font-size:10.5px; color:#9aa39a; text-align:center; }
+
+  #principal { flex: 1 1 auto; min-width: 0; padding: 18px 24px; overflow: auto; }
+  #cabecera-contenido { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap:wrap; }
+  #cabecera-contenido h2 { font-size: 20px; margin: 0; }
+  #cabecera-contenido .sub { font-size:13px; color:var(--ink-soft); font-weight:400; }
+  #swatch-color { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); cursor: pointer; }
+  #cabecera-contenido input[type=color] { display:none; }
+  #swatch-icono { width: 26px; height: 26px; border: 1.5px dashed var(--line); border-radius: 50%; cursor: pointer; display:flex; align-items:center; justify-content:center; padding:4px; }
+  #swatch-icono img { width:100%; height:100%; object-fit:contain; }
+  #swatch-icono svg { width:100%; height:100%; fill:var(--ink-soft); }
+  .btn-quitar-icono { border:none; background:none; color:#a33; font-size:11.5px; cursor:pointer; }
+  #swatch-icono svg.linea, #swatch-icono svg.linea * { fill:none !important; stroke: var(--accent); }
+  .btn-cambiar-simbolo { border:1px solid var(--line); background:white; border-radius:6px; padding:3px 8px; font-size:11.5px; cursor:pointer; color:var(--ink-soft); }
+  #picker-simbolo { flex-basis:100%; background:white; border:1px solid var(--line); border-radius:10px; padding:12px; margin:6px 0 4px; max-width:560px; box-shadow:0 3px 10px rgba(0,0,0,0.08); }
+  #picker-simbolo .picker-titulo { font-size:12px; color:var(--ink-soft); margin-bottom:8px; }
+  #picker-simbolo .picker-grid { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
+  #picker-simbolo .icono-opcion svg * { stroke: var(--accent); fill:none; }
+  #picker-simbolo .picker-acciones { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center; }
+  #picker-simbolo .picker-acciones button:not(.btn-quitar-icono) { border:1px solid var(--line); background:white; border-radius:6px; padding:6px 10px; font-size:12px; cursor:pointer; }
+  #acciones-globales { margin: 10px 0 18px; display: flex; gap: 8px; align-items:center; flex-shrink:0; }
+  #acciones-globales button { border: 1px solid var(--line); background: white; padding: 7px 12px; border-radius: 7px; font-size: 12.5px; cursor: pointer; }
+  #acciones-globales button.primario { background: var(--accent-app); color: white; border-color: var(--accent-app); }
+
+  .hoja-preview {
+    width: 733px;
+    height: 1062px;
+    flex-shrink: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 60mm);
+    grid-template-rows: repeat(4, 60mm);
+    gap: 3mm;
+    justify-content: center;
+    align-content: center;
+    background: white;
+    border: 1px solid var(--line);
+    padding: 11px;
+  }
+  #hoja-scroll { overflow: auto; max-width: 100%; }
+
+  #hero-wrap { margin-bottom: 18px; display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap; }
+  .hero-etiqueta { font-size:11.5px; color:var(--ink-soft); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px; }
+  .hero-marco { width: 500px; height: 500px; position:relative; flex-shrink:0; }
+  .hero-marco .carta { position:absolute; top:0; left:0; width:60mm; height:60mm; transform: scale(2.2); transform-origin: top left; }
+
+  .leyenda-caja { position:relative; flex-shrink:0; }
+  .leyenda-marco { width: 210px; height: 297px; overflow:hidden; border:1px solid var(--line); border-radius:6px; position:relative; background:white; }
+  .leyenda-marco .hoja-preview { transform: scale(0.2865); transform-origin: top left; border:none; }
+  .carta.resaltada { outline: 3px solid #c9622d; outline-offset: -1px; }
+  .leyenda-marco .carta.resaltada { outline-width: 9px; outline-offset: -2px; }
+  .btn-ampliar { position:absolute; bottom:6px; right:6px; width:26px; height:26px; border-radius:50%; background:white; border:1px solid var(--line); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
+  .btn-volver-leyenda { border:1px solid var(--line); background:white; border-radius:7px; padding:6px 11px; font-size:12px; cursor:pointer; margin-bottom:12px; }
+
+  .carta {
+    --accent: #48A230;
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    padding: 5px 6px 6px;
+    display: flex;
+    flex-direction: column;
+    background: white;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .carta.vacia { border-style: dashed; opacity: 0.35; cursor: default; align-items:center; justify-content:center; color: var(--ink-soft); font-size: 11px;}
+  .carta__cabecera { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
+  .carta__numero { background: var(--accent); color: white; font-weight: 800; font-size: 10.5px; border-radius: 4px; padding: 1px 5px; }
+  .carta__icono-mini { width: 16px; height: 16px; border: 1.3px solid var(--accent); border-radius: 50%; display:flex; align-items:center; justify-content:center; padding:2px; flex-shrink:0; }
+  .carta__icono-mini svg, .carta__icono-mini img { width: 100%; height: 100%; object-fit: contain; }
+  .carta__icono-mini svg, .carta__icono-mini svg * { fill: var(--accent); }
+  .carta__icono-mini svg.linea, .carta__icono-mini svg.linea * { fill: none; stroke: var(--accent); }
+  .carta__titulo { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; margin-left: auto; text-align:right; }
+  .carta__cuerpo { flex: 1; display:flex; flex-direction: column; align-items:center; justify-content:center; gap:4px; text-align:center; min-height:0; }
+  .carta--ruta .carta__cuerpo { padding: 0; gap:0; }
+  .carta__dibujo { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  .carta__dibujo svg { width: 125%; height: 125%; flex-shrink: 0; }
+  .ruta-linea { fill:none; stroke:#922D40; stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round; }
+  .ruta-punto { fill:#922D40; }
+  .ruta-punto--guia { fill:#8a8a8a; }
+  .carta--regla .carta__cuerpo { gap: 8px; }
+  .carta__icono-grande-bg { width: 62px; height: 62px; border-radius:50%; background: color-mix(in srgb, var(--accent) 15%, white); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .carta__icono-grande { width: 40px; height: 40px; flex-shrink:0; }
+  .carta__icono-grande svg { width:100%; height:100%; }
+  .carta__icono-grande svg, .carta__icono-grande svg * { stroke: var(--accent); fill:none; }
+  .carta__icono-grande img { width:100%; height:100%; object-fit:contain; }
+  .carta__titulo-regla { font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing:0.3px; }
+  .carta__descripcion { font-size: 10.5px; line-height: 1.35; color:#3a3a3a; max-width: 96%; }
+  .carta__detalle { font-size: 8.5px; font-weight: 800; letter-spacing: 0.3px; text-transform: uppercase; color: var(--accent); border: 1.3px solid var(--accent); border-radius: 20px; padding: 1.5px 8px; margin-top: -1px; }
+
+  .carta-boton-nueva { border: 2px dashed var(--line); border-radius: 8px; display: flex; align-items:center; justify-content:center; color: var(--ink-soft); font-size: 12px; cursor: pointer; background: transparent; }
+  .carta-boton-nueva:hover { border-color: var(--accent-app); color: var(--accent-app); }
+
+  #col-editor { flex: 0 0 var(--w-der); min-width: 0; display:flex; }
+  #col-editor.cerrada { flex-basis: 0 !important; width:0; overflow:hidden; }
+  #editor { background: var(--panel); border-left: 1px solid var(--line); padding: 18px 20px; overflow-y: auto; width:100%; }
+  #editor-cabecera { display:flex; align-items:center; margin-bottom:12px; }
+  #editor-cabecera h3 { font-size: 14px; margin: 0; }
+  #btn-cerrar-editor { margin-left:auto; border:none; background:none; font-size:16px; cursor:pointer; color:var(--ink-soft); }
+  #btn-reabrir-editor { position:fixed; top:16px; right:16px; z-index:20; border:1px solid var(--line); background:white; border-radius:8px; padding:7px 12px; font-size:12.5px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.12); }
+  #editor label { display:block; font-size: 11.5px; color: var(--ink-soft); margin: 12px 0 4px; }
+  #editor input[type=text], #editor textarea, #editor select { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; font-family: inherit; }
+  #editor textarea { min-height: 72px; resize: vertical; }
+  .tipo-toggle { display:flex; gap:6px; margin-top: 4px; }
+  .tipo-toggle button { flex:1; padding:7px; border:1px solid var(--line); background:white; border-radius:6px; cursor:pointer; font-size:12.5px; }
+  .tipo-toggle button.activo { background: var(--accent-app); color:white; border-color:var(--accent-app); }
+
+  #lienzo-wrap { border:1px solid var(--line); border-radius:8px; margin-top:6px; overflow:hidden; background:#fafaf7;}
+  #lienzo-wrap svg { width:100%; display:block; }
+  .lienzo-botones { display:flex; gap:6px; margin-top:6px; flex-wrap: wrap; }
+  .lienzo-botones button { font-size: 11px; padding: 5px 8px; border:1px solid var(--line); background:white; border-radius:6px; cursor:pointer; }
+
+  .icono-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; margin-top:6px; }
+  .icono-opcion { border:1.5px solid var(--line); border-radius:8px; padding:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:white; }
+  .icono-opcion svg { width:22px; height:22px; stroke:#333; fill:none; }
+  .icono-opcion.activo { border-color: var(--accent-app); background:#eef3ec; }
+
+  #imagen-subida-prev { margin-top:8px; display:flex; align-items:center; gap:8px; }
+  #imagen-subida-prev img { width:44px; height:44px; object-fit:contain; border:1px solid var(--line); border-radius:6px; background:#fafaf7; }
+  #imagen-subida-prev button { font-size:11px; border:none; background:none; color:#a33; cursor:pointer; }
+
+  #editor-acciones { display:flex; gap:8px; margin-top:18px; }
+  #editor-acciones button { flex:1; padding:9px; border-radius:7px; border:1px solid var(--line); background:white; cursor:pointer; font-size:13px; }
+  #editor-acciones button.guardar { background: var(--accent-app); color:white; border-color: var(--accent-app); font-weight:600; }
+  #editor-vacio { color: var(--ink-soft); font-size: 13px; margin-top: 40px; text-align:center; }
+  #btn-borrar { color:#a33; font-size:12px; border:none; background:none; cursor:pointer; margin-top:10px; }
+
+  @media print {
+    body { display:block; background:white; overflow:visible; height:auto; }
+    #contenidos, #col-editor, #acciones-globales, #cabecera-contenido, #hero-wrap, .resizer, #btn-reabrir-editor { display:none !important; }
+    #principal { padding:0; overflow: visible; }
+    #hoja-scroll { overflow:visible; }
+    .hoja-preview { width:194mm; height:281mm; border:none; padding:0; margin:0 auto; page-break-after: always; }
+    .hoja-preview:last-of-type { page-break-after: auto; }
+    .carta-boton-nueva, .carta.vacia { visibility: hidden; }
+    .no-print { display:none !important; }
+    @page { size:A4; margin:8mm; }
+  }
+</style>
+</head>
+<body>
+
+<div id="contenidos">
+  <div id="marca">
+    <div id="logo-app" onclick="document.getElementById('input-logo').click()"></div>
+    <span class="titulo">CARDio</span>
+    <button id="btn-colapsar-izq" onclick="toggleColapsarIzq()">«</button>
+  </div>
+  <input type="file" id="input-logo" accept="image/png,image/jpeg" onchange="subirLogo(event)">
+  <div id="lista-scroll"></div>
+  <div id="nuevo-contenido">
+    <input type="text" id="input-nuevo-contenido" placeholder="Nuevo contenido…">
+    <button onclick="crearContenido()">+</button>
+  </div>
+  <div id="pie-marca">Generador de cartas educativas · v0.6</div>
+</div>
+
+<div class="resizer" id="resizer-izq"></div>
+
+<div id="principal">
+  <div id="cabecera-contenido"></div>
+  <div id="acciones-globales">
+    <button class="primario" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+    <button onclick="exportarYAML()">⬇️ Exportar YAML (.zip)</button>
+    <label style="font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:5px;margin-left:6px;">
+      <input type="checkbox" id="chk-reverso" onchange="incluirReverso=this.checked; renderPrincipal();"> Incluir reverso (doble cara)
+    </label>
+  </div>
+  <div id="hero-wrap"></div>
+  <div id="hoja-scroll"><div id="hojas-contenedor"></div></div>
+</div>
+
+<div class="resizer" id="resizer-der"></div>
+<div id="col-editor"><div id="editor"></div></div>
+<button id="btn-reabrir-editor" style="display:none" onclick="toggleEditorCerrado(false)">◀ Editor</button>
+
+<script>
+const GRID = [[25,25],[50,25],[75,25], [25,50],[50,50],[75,50], [25,75],[50,75],[75,75]];
+
+const ICONOS = {
+  memoria_visual: '<path d="M30 10h40v26H30z" rx="3"/><circle cx="42" cy="20" r="3"/><path d="M32 30 L45 20 L55 27 L68 15"/><path d="M20 62c0-14 60-14 60 0 0 14-60 14-60 0z"/><circle cx="50" cy="62" r="10"/><circle cx="50" cy="62" r="3"/>',
+  parejas: '<circle cx="25" cy="20" r="9"/><path d="M10 55 L10 40 Q10 30 25 30 Q40 30 40 40 L40 55"/><circle cx="75" cy="20" r="9"/><path d="M60 55 L60 40 Q60 30 75 30 Q90 30 90 40 L90 55"/><path d="M33 47 L50 60 L67 47"/>',
+  marcha_atras: '<path d="M78 35 A32 32 0 1 0 82 55"/><path d="M64 22 L80 33 L67 46"/><path d="M22 65 A32 32 0 1 0 18 45"/><path d="M36 78 L20 67 L33 54"/>',
+  cronometro: '<circle cx="50" cy="55" r="32"/><path d="M50 55 L50 35"/><path d="M50 55 L64 62"/><path d="M40 8 h20"/><path d="M50 8 v10"/>',
+  silbato: '<rect x="15" y="40" width="35" height="22" rx="8"/><circle cx="65" cy="51" r="18"/><path d="M50 45 v12"/><path d="M15 45 h-8" />',
+  corazon: '<path d="M50 85 C15 60 10 35 28 24 C40 17 50 25 50 35 C50 25 60 17 72 24 C90 35 85 60 50 85 Z"/>',
+  manzana: '<path d="M50 30 C30 30 22 48 24 62 C26 76 36 88 46 88 C50 88 50 85 54 85 C58 85 58 88 62 88 C72 88 82 74 82 60 C82 46 70 32 56 32" /><path d="M48 30 C48 20 55 14 62 13"/>',
+  diana: '<circle cx="50" cy="50" r="34"/><circle cx="50" cy="50" r="21"/><circle cx="50" cy="50" r="8"/>',
+  balon: '<circle cx="50" cy="50" r="34"/><path d="M50 16 L50 84"/><path d="M16 50 L84 50"/><path d="M25 25 L75 75"/><path d="M75 25 L25 75"/>',
+  raqueta: '<ellipse cx="50" cy="36" rx="26" ry="32"/><path d="M50 68 L50 92"/><path d="M38 92 L62 92"/>',
+  mano: '<path d="M30 60 L30 30 q0-8 8-8 q8 0 8 8 L46 55 L46 20 q0-8 8-8 q8 0 8 8 L62 55 L62 30 q0-8 8-8 q8 0 8 8 L78 60 q0 20-15 28 q-15 8-30 0 q-15-8-13-28 Z"/>',
+  flecha_abajo: '<path d="M50 15 L50 75"/><path d="M25 55 L50 80 L75 55"/>',
+  flecha_arriba: '<path d="M50 85 L50 25"/><path d="M25 45 L50 20 L75 45"/>',
+  rodilla: '<circle cx="50" cy="15" r="8"/><path d="M50 23 L50 55"/><path d="M50 55 L35 70 L35 85"/><path d="M50 55 L65 65"/><path d="M27 85 L43 85"/>',
+  pata_coja: '<circle cx="50" cy="14" r="8"/><path d="M50 22 L50 55"/><path d="M50 30 L32 45"/><path d="M50 30 L68 45"/><path d="M50 55 L38 88"/><path d="M50 55 L62 65 L58 55"/>',
+  cabeza: '<circle cx="50" cy="55" r="24"/><path d="M50 20 L50 10"/><path d="M35 25 L28 18"/><path d="M65 25 L72 18"/>',
+  estrella: '<path d="M50 12 L61 38 L90 40 L67 58 L75 86 L50 70 L25 86 L33 58 L10 40 L39 38 Z"/>',
+  doble_flecha: '<path d="M20 35 L80 35"/><path d="M65 20 L80 35 L65 50"/><path d="M80 65 L20 65"/><path d="M35 50 L20 65 L35 80"/>',
+  escalera: '<path d="M15 85 L15 65 L35 65 L35 45 L55 45 L55 25 L75 25 L75 15"/>',
+  doble: '<path d="M30 20 L50 50 L30 80"/><path d="M55 20 L75 50 L55 80"/>',
+  salto: '<circle cx="50" cy="20" r="8"/><path d="M50 28 L50 55"/><path d="M50 40 L30 50"/><path d="M50 40 L70 50"/><path d="M50 55 L35 75"/><path d="M50 55 L65 75"/><path d="M20 88 q30-15 60 0"/>',
+  tortuga: '<ellipse cx="50" cy="55" rx="32" ry="22"/><circle cx="14" cy="55" r="8"/><path d="M30 74 L22 88"/><path d="M70 74 L78 88"/><path d="M35 40 L40 32"/><path d="M65 40 L60 32"/>',
+  mascara: '<path d="M10 40 q40-25 80 0 q-10 15-40 15 q-30 0-40-15 Z"/><circle cx="35" cy="42" r="5"/><circle cx="65" cy="42" r="5"/>',
+  corona: '<path d="M15 70 L20 35 L38 55 L50 25 L62 55 L80 35 L85 70 Z"/><path d="M15 70 L85 70 L85 80 L15 80 Z"/>',
+  megafono: '<path d="M20 30 h45 a10 10 0 0 1 10 10 v15 a10 10 0 0 1 -10 10 h-25 l-15 15 v-15 h-5 a10 10 0 0 1 -10-10 v-15 a10 10 0 0 1 10-10 Z"/>',
+  rayo: '<path d="M55 10 L25 55 L45 55 L38 90 L75 45 L52 45 Z"/>',
+  volante: '<path d="M40 70 h20 v6 a10 10 0 0 1 -20 0 Z"/><path d="M42 70 L22 16"/><path d="M58 70 L78 16"/><path d="M22 16 Q50 8 78 16"/><path d="M50 70 L50 11"/><path d="M46 70 L36 13"/><path d="M54 70 L64 13"/><path d="M30 42 Q50 36 70 42"/>',
+  copo: '<path d="M50 14 L50 86"/><path d="M41 21 L50 30 L59 21"/><path d="M41 79 L50 70 L59 79"/><g transform="rotate(60 50 50)"><path d="M50 14 L50 86"/><path d="M41 21 L50 30 L59 21"/><path d="M41 79 L50 70 L59 79"/></g><g transform="rotate(-60 50 50)"><path d="M50 14 L50 86"/><path d="M41 21 L50 30 L59 21"/><path d="M41 79 L50 70 L59 79"/></g>',
+  guante: '<path d="M32 88 L32 52 L27 32 q-1-7 6-8 q6 0 7 6 L43 46 L43 20 q0-7 6-7 q7 0 7 7 L56 44 L58 24 q1-7 7-6 q6 1 6 8 L68 50 L74 42 q5-5 10 0 q3 4 0 9 L68 72 L68 88 Z"/><path d="M32 76 L68 76"/>',
+  cohete: '<path d="M50 10 C64 22 66 44 62 66 L38 66 C34 44 36 22 50 10 Z"/><circle cx="50" cy="36" r="7"/><path d="M38 50 L26 68 L38 66"/><path d="M62 50 L74 68 L62 66"/><path d="M44 72 L50 88 L56 72"/>',
+  porteria: '<path d="M12 78 L12 26 L88 26 L88 78"/><path d="M31 26 L31 78 M50 26 L50 78 M69 26 L69 78" stroke-width="2"/><path d="M12 44 L88 44 M12 61 L88 61" stroke-width="2"/><path d="M4 78 L96 78"/>',
+  campo: '<path d="M10 22 H90 V78 H10 Z"/><path d="M50 22 V78"/><circle cx="50" cy="50" r="9"/><path d="M10 37 H21 V63 H10"/><path d="M90 37 H79 V63 H90"/>',
+  stop: '<path d="M36.2 16.7 L63.8 16.7 L83.3 36.2 L83.3 63.8 L63.8 83.3 L36.2 83.3 L16.7 63.8 L16.7 36.2 Z"/><path d="M32 50 L68 50"/>',
+  palmera: '<path d="M50 88 Q45 60 52 34"/><path d="M52 34 Q36 20 16 30"/><path d="M52 34 Q66 18 86 28"/><path d="M52 34 Q38 38 30 54"/><path d="M52 34 Q67 40 72 56"/><path d="M52 34 Q54 20 46 10"/><path d="M24 88 Q50 80 76 88"/>',
+  grupo: '<circle cx="50" cy="24" r="8"/><path d="M36 74 L36 50 Q36 38 50 38 Q64 38 64 50 L64 74"/><circle cx="22" cy="34" r="6"/><path d="M12 74 L12 56 Q12 46 22 46 Q28 46 32 49"/><circle cx="78" cy="34" r="6"/><path d="M88 74 L88 56 Q88 46 78 46 Q72 46 68 49"/>',
+  dos_balones: '<circle cx="30" cy="55" r="18"/><path d="M12 55 Q30 45 48 55"/><path d="M30 37 Q24 55 30 73"/><circle cx="70" cy="55" r="18"/><path d="M52 55 Q70 45 88 55"/><path d="M70 37 Q64 55 70 73"/><path d="M42 22 L50 14 L58 22"/>',
+  fichaje: '<circle cx="40" cy="28" r="10"/><path d="M20 84 L20 62 Q20 46 40 46 Q60 46 60 62 L60 84"/><path d="M80 36 V62 M67 49 H93"/>',
+  disparo: '<circle cx="68" cy="50" r="19"/><path d="M49 50 Q68 40 87 50"/><path d="M68 31 Q61 50 68 69"/><path d="M8 38 H38 M16 50 H42 M8 62 H38"/>',
+  robar: '<path d="M16 30 h30 v42 h-30 Z"/><path d="M54 18 h30 v42 h-30 Z"/><path d="M69 68 Q62 90 36 82"/><path d="M42 75 L35 82 L43 88"/>',
+  comodin: '<path d="M22 70 L28 32 L43 56 L50 24 L57 56 L72 32 L78 70 Z"/><circle cx="27" cy="25" r="5"/><circle cx="50" cy="16" r="5"/><circle cx="73" cy="25" r="5"/><path d="M22 70 H78 V82 H22 Z"/>',
+  sin_manos: '<g transform="translate(50 52) scale(0.72) translate(-54 -52)"><path d="M30 60 L30 30 q0-8 8-8 q8 0 8 8 L46 55 L46 20 q0-8 8-8 q8 0 8 8 L62 55 L62 30 q0-8 8-8 q8 0 8 8 L78 60 q0 20-15 28 q-15 8-30 0 q-15-8-13-28 Z"/></g><circle cx="50" cy="50" r="40"/><path d="M22 22 L78 78"/>',
+  bola_arriba: '<path d="M28 80 Q50 94 72 80"/><circle cx="50" cy="24" r="9"/><path d="M50 70 L50 42"/><path d="M42 50 L50 42 L58 50"/>',
+  mano_mano: '<path d="M8 82 Q20 92 32 82"/><path d="M68 82 Q80 92 92 82"/><path d="M20 74 Q50 0 80 74"/><circle cx="50" cy="30" r="8"/>',
+  ojos_cerrados: '<circle cx="50" cy="18" r="8"/><path d="M14 46 Q50 74 86 46"/><path d="M28 58 L22 68 M50 63 L50 75 M72 58 L78 68"/>',
+  espalda: '<circle cx="38" cy="22" r="8"/><path d="M38 30 L38 62"/><path d="M38 62 L28 88 M38 62 L48 88"/><path d="M38 40 L52 50"/><path d="M26 56 Q8 16 60 18"/><circle cx="70" cy="20" r="7"/>',
+  palmadas: '<path d="M30 84 L40 38 q2-7 9-5 L48 84"/><path d="M70 84 L60 38 q-2-7 -9-5 L52 84"/><path d="M50 10 L50 20 M34 16 L39 24 M66 16 L61 24"/>',
+  giro: '<path d="M78 52 A28 28 0 1 1 62 26"/><path d="M54 16 L64 27 L52 34"/><circle cx="50" cy="54" r="7"/>',
+  caminar: '<circle cx="46" cy="14" r="7"/><path d="M46 21 L44 52"/><path d="M45 30 L32 44 M45 30 L58 40"/><path d="M44 52 L32 84 M44 52 L58 68 L56 84"/><path d="M66 60 L90 60 M82 52 L90 60 L82 68"/>',
+  caminar_atras: '<g transform="translate(20 0)"><circle cx="46" cy="14" r="7"/><path d="M46 21 L44 52"/><path d="M45 30 L32 44 M45 30 L58 40"/><path d="M44 52 L32 84 M44 52 L58 68 L56 84"/></g><path d="M36 60 L10 60 M18 52 L10 60 L18 68"/>',
+  pie: '<path d="M18 30 L34 30 L36 58 L78 64 Q88 66 88 74 L88 80 L18 80 Z"/><circle cx="60" cy="50" r="9"/>',
+  dos_bolas: '<path d="M12 84 Q28 94 44 84"/><path d="M56 84 Q72 94 88 84"/><circle cx="28" cy="22" r="8"/><circle cx="72" cy="22" r="8"/><path d="M28 74 L28 42 M21 49 L28 42 L35 49"/><path d="M72 74 L72 42 M65 49 L72 42 L79 49"/>',
+  intercambio: '<path d="M8 84 Q20 94 32 84"/><path d="M68 84 Q80 94 92 84"/><path d="M20 76 Q46 -2 80 74"/><path d="M80 76 Q56 30 22 74"/><circle cx="48" cy="32" r="7"/>',
+  ducha: '<path d="M22 70 Q50 -4 78 70"/><circle cx="50" cy="31" r="8"/><path d="M72 84 L28 84"/><path d="M36 77 L28 84 L36 91"/>',
+  cruce: '<path d="M18 80 Q24 22 82 30"/><path d="M82 80 Q76 22 18 30"/><path d="M74 22 L83 30 L74 38"/><path d="M26 22 L17 30 L26 38"/>',
+  zigzag: '<path d="M12 76 L30 40 L48 76 L66 40 L82 70"/><path d="M76 64 L83 72 L90 62"/><path d="M26 88 L30 80 L34 88 Z"/><path d="M62 88 L66 80 L70 88 Z"/>',
+  cascada: '<path d="M50 62 C38 42 14 46 18 62 C22 78 40 76 50 62 C60 48 78 46 82 62 C86 78 62 80 50 62 Z"/><circle cx="24" cy="24" r="7"/><circle cx="50" cy="16" r="7"/><circle cx="76" cy="24" r="7"/>',
+  una_mano_dos: '<path d="M32 84 Q50 96 68 84"/><circle cx="42" cy="34" r="8"/><circle cx="60" cy="52" r="8"/><path d="M76 58 A28 28 0 1 0 68 24"/><path d="M60 22 L69 24 L66 33"/>',
+  pase: '<circle cx="16" cy="40" r="7"/><path d="M6 88 L6 66 Q6 54 16 54 Q26 54 26 66 L26 88"/><circle cx="84" cy="40" r="7"/><path d="M74 88 L74 66 Q74 54 84 54 Q94 54 94 66 L94 88"/><path d="M28 52 Q50 8 72 52"/><circle cx="50" cy="30" r="6"/>',
+  tarjeta: '<path d="M38 12 L72 18 L63 86 L29 80 Z"/><path d="M44 24 L62 27"/>',
+};
+const ICONO_STROKE_WIDTH = 4;
+const PALETA = ['#48A230', '#2D6E9E', '#C9622D', '#7A3E9E', '#B0303F', '#1E8A7A', '#B08A1E', '#5A5A9E', '#3E8FA6', '#8A4E9E', '#4E9E5A', '#C94E7A', '#9E6A2D', '#2D9EC9', '#7A2D6E'];
+const LOGO_BRUJULA_B64 = "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";
+
+let estado = { contenidos: {}, subcarpetas: {}, cartas: {}, logoDataUrl: null };
+let contenidoActivo = null;
+let subcarpetaActiva = null;
+let editando = null;
+// Cartas cuadradas de 6 cm: 3 columnas x 4 filas en un A4
+const COLUMNAS_HOJA = 3, FILAS_HOJA = 4, CARTAS_POR_HOJA = COLUMNAS_HOJA * FILAS_HOJA;
+let modoVista = 'legend';
+let pickerSimbolo = false;
+let colapsadaIzq = false;
+let editorCerrado = false;
+let incluirReverso = false;
+
+function htmlReversoCarta(color, iconoContenido, nombreContenido) {
+  const insignia = iconoContenido
+    ? insigniaHTML(iconoContenido, 5)
+    : `<svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:var(--accent);"><path d="M12 2c-4 3-7 7-7 11a7 7 0 0 0 14 0c0-4-3-8-7-11z"/></svg>`;
+  return `<div class="carta" style="--accent:${color}">
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;">
+      <div style="width:60px;height:60px;">${insignia}</div>
+      <div style="font-weight:800;text-transform:uppercase;letter-spacing:0.4px;font-size:12px;color:#333;">${escapeHtml(nombreContenido)}</div>
+    </div>
+  </div>`;
+}
+function htmlReversoHojas(numCartas, color, iconoContenido, nombreContenido) {
+  const porHoja = CARTAS_POR_HOJA;
+  const numHojas = Math.max(1, Math.ceil(numCartas / porHoja));
+  let html = '';
+  for (let h = 0; h < numHojas; h++) {
+    const enEstaHoja = Math.min(porHoja, numCartas - h * porHoja);
+    const slots = [];
+    for (let i = 0; i < porHoja; i++) slots.push(i < enEstaHoja);
+    // Reverso: cada fila se invierte (espejo horizontal) para que coincida al imprimir a doble cara
+    const mirrored = [];
+    for (let f = 0; f < FILAS_HOJA; f++) mirrored.push(...slots.slice(f * COLUMNAS_HOJA, (f + 1) * COLUMNAS_HOJA).reverse());
+    html += '<div class="hoja-preview">';
+    mirrored.forEach(activa => { html += activa ? htmlReversoCarta(color, iconoContenido, nombreContenido) : `<div class="carta vacia">vacío</div>`; });
+    html += '</div>';
+  }
+  return html;
+}
+
+function capitalizar(s) {
+  s = (s || '').trim();
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+const CONTENIDOS_INICIALES = ['Otros','Ultimate','Balonmano','Orientación','Salsa','Malabares','Acrosport','Pinfuvote','Bádminton','Voleibol','Crossfit','Expresión corporal','Béisbol','Rugby tag','Hockey'];
+
+function estadoSemilla() {
+  const contenidos = {};
+  CONTENIDOS_INICIALES.forEach((nombre, i) => { contenidos[nombre] = { color: PALETA[i % PALETA.length], icono: null }; });
+  contenidos['Orientación'].color = '#48A230';
+  contenidos['Orientación'].icono = 'data:image/png;base64,' + LOGO_BRUJULA_B64;
+  const subcarpetas = { 'Orientación': ['Rutas espaciales', 'Retos'] };
+  const cartas = {
+    'Orientación': {
+      'Rutas espaciales': [
+        { tipo:'ruta', categoria_label:'RUTA ESPACIAL', secuencia:[0,1,2,5,8,7,6,3] },
+        { tipo:'ruta', categoria_label:'RUTA ESPACIAL', secuencia:[0,2,8,0] },
+        { tipo:'ruta', categoria_label:'RUTA ESPACIAL', secuencia:[6,4,2,5,8] },
+      ],
+      'Retos': [
+        { tipo:'regla', icono:'memoria_visual', titulo:'Memoria visual', descripcion:'Observa durante 10 segundos y después reproduce la figura sin verla.' },
+        { tipo:'regla', icono:'parejas', titulo:'Por parejas', descripcion:'Uno realiza el recorrido y otro le guía verbalmente.' },
+        { tipo:'regla', icono:'marcha_atras', titulo:'Marcha atrás', descripcion:'Observa durante 10 segundos y después reproduce la figura sin verla.' },
+      ]
+    }
+  };
+  return { contenidos, subcarpetas, cartas, logoDataUrl: null };
+}
+
+const CLAVE_ESTADO = 'cardio_estado_v3';
+async function cargarEstado() {
+  let guardado = null;
+  // 1) Navegador (funciona en GitHub Pages y abriendo el archivo en local)
+  try { guardado = localStorage.getItem(CLAVE_ESTADO); } catch (e) {}
+  // 2) Almacenamiento de claude.ai (vista previa del chat)
+  if (!guardado) {
+    try { if (window.storage) { const r = await window.storage.get(CLAVE_ESTADO, false); if (r) guardado = r.value; } } catch (e) {}
+  }
+  try { estado = guardado ? JSON.parse(guardado) : estadoSemilla(); }
+  catch (e) { estado = estadoSemilla(); }
+  aplicarMigraciones();
+  await guardarEstado();
+  const nombres = nombresOrdenados();
+  contenidoActivo = nombres[0] || null;
+  const subs = estado.subcarpetas[contenidoActivo] || [];
+  subcarpetaActiva = subs[0] || null;
+  render();
+}
+
+function aplicarMigraciones() {
+  migracionesV05();
+  migrarRetosBadminton();
+}
+
+// Cada migración se aplica una sola vez (queda anotada), así no reaparece si luego la cambias o la borras
+function migracionesV05() {
+  if (!estado.migraciones) estado.migraciones = [];
+  const hecha = (id) => estado.migraciones.includes(id);
+  const marcar = (id) => estado.migraciones.push(id);
+
+  if (!hecha('volante_badminton')) {
+    if (estado.contenidos['Bádminton'] && !estado.contenidos['Bádminton'].icono) estado.contenidos['Bádminton'].icono = 'lib:volante';
+    marcar('volante_badminton');
+  }
+  if (!hecha('futbol_kings_league')) {
+    if (!estado.contenidos['Fútbol']) estado.contenidos['Fútbol'] = { color: '#D08A00', icono: 'lib:balon' };
+    if (!estado.subcarpetas['Fútbol']) estado.subcarpetas['Fútbol'] = [];
+    if (!estado.subcarpetas['Fútbol'].includes('Kings League')) estado.subcarpetas['Fútbol'].push('Kings League');
+    if (!estado.cartas['Fútbol']) estado.cartas['Fútbol'] = {};
+    if (!estado.cartas['Fútbol']['Kings League']) estado.cartas['Fútbol']['Kings League'] = [
+      { tipo:'regla', icono:"copo", titulo:"Neverazo", descripcion:"¡Congelados! Durante 30 segundos, los jugadores rivales (excepto el portero) no pueden moverse. Si lo hacen… ¡gol!" },
+      { tipo:'regla', icono:"palmera", titulo:"Área desierta", descripcion:"¡Portero, fuera de ahí! Durante 1 minuto, nadie del equipo rival, ni siquiera el portero, puede entrar en su área. Si lo hacen… ¡gol en contra!" },
+      { tipo:'regla', icono:"grupo", titulo:"Minuto loco", descripcion:"Durante 2 minutos, tu equipo puede jugar con hasta 7 jugadores. ¡Desconcierta al rival!" },
+      { tipo:'regla', icono:"tortuga", titulo:"Modo tortuga", descripcion:"Durante 1 minuto, el equipo rival solo puede andar. Si alguien corre… ¡gol en contra!" },
+      { tipo:'regla', icono:"dos_balones", titulo:"Penalti doble", descripcion:"Tu equipo lanza 2 penaltis seguidos, pero solo cuenta el primero que entre. Si fallan ambos, se pierde la oportunidad." },
+      { tipo:'regla', icono:"fichaje", titulo:"Te elijo a ti", descripcion:"Elige a alguien del público para que juegue con tu equipo durante 2 minutos. ¡Aprovechad la superioridad numérica!" },
+      { tipo:'regla', icono:"disparo", titulo:"Tira desde Sevilla", descripcion:"Durante todo el partido, los goles que marques desde fuera del área valen doble." },
+      { tipo:'regla', icono:"mascara", titulo:"Penalti a ciegas", descripcion:"Quien lanza el penalti debe hacerlo con los ojos tapados (con antifaz). Tiene 2 intentos." },
+      { tipo:'regla', icono:"robar", titulo:"Para mí", descripcion:"Roba una carta al azar del equipo rival. ¡Así no podrá usarla!" },
+      { tipo:'regla', icono:"comodin", titulo:"The Joker", descripcion:"¡Un comodín! La carta más valiosa de todas: elige la carta que prefieras." },
+      { tipo:'regla', icono:"sin_manos", titulo:"Manco por un día", descripcion:"Durante 3 minutos, el portero rival no puede usar las manos. Si las usa… ¡gol para tu equipo!" },
+      { tipo:'regla', icono:"tarjeta", titulo:"Te expulso", descripcion:"¡Castigado! Elige a un jugador del equipo rival: queda fuera 2 minutos y su equipo juega con uno menos." },
+      { tipo:'regla', icono:"silbato", titulo:"X2 Penalti entrenadoras", descripcion:"¡Entrenadora, calienta que sales! Cada una de las entrenadoras puede tirar un penalti en cualquier momento." },
+      { tipo:'regla', icono:"guante", titulo:"Solo con porteros", descripcion:"Durante 1 minuto, el partido se convierte en un 1 contra 1 en el que solo juegan los porteros." },
+      { tipo:'regla', icono:"cohete", titulo:"Penalti desde tu campo", descripcion:"Lanza un penalti desde donde elijas de tu propio campo. ¡El portero no puede meterse en el área para defenderlo!" },
+      { tipo:'regla', icono:"porteria", titulo:"Tira al hueco", descripcion:"Tira un penalti desde el centro del campo sin portero. ¡Cuidado! Si das al palo, gol para el equipo rival." },
+      { tipo:'regla', icono:"campo", titulo:"De portería a portería", descripcion:"Afina tu puntería: lanza un penalti sin portero desde tu propia área y resuelve el partido." },
+      { tipo:'regla', icono:"stop", titulo:"Anulo tu carta", descripcion:"Anula, sin verla, una de las cartas que el equipo rival aún no haya usado. ¡Buena suerte en tu elección!" }
+    ];
+    marcar('futbol_kings_league');
+  }
+  if (!hecha('malabares_retos')) {
+    if (!estado.contenidos['Malabares']) estado.contenidos['Malabares'] = { color: '#1E8A7A', icono: null };
+    if (!estado.contenidos['Malabares'].icono) estado.contenidos['Malabares'].icono = 'lib:cascada';
+    if (!estado.subcarpetas['Malabares']) estado.subcarpetas['Malabares'] = [];
+    if (!estado.cartas['Malabares']) estado.cartas['Malabares'] = {};
+    const mal = {
+      "Nivel 1 · Una bola": [
+      { tipo:'regla', icono:"bola_arriba", titulo:"Ascensor", descripcion:"Lanza la bola a la altura de los ojos con la mano hábil y recógela con la misma mano.", detalle:"1 bola · 15 seguidas" },
+      { tipo:'regla', icono:"bola_arriba", titulo:"Ascensor zurdo", descripcion:"Lanza la bola a la altura de los ojos con la mano NO hábil y recógela con la misma mano.", detalle:"1 bola · 5 seguidas" },
+      { tipo:'regla', icono:"mano_mano", titulo:"Arcoíris", descripcion:"Pasa la bola de una mano a la otra dibujando un arco por delante de los ojos. Ida y vuelta cuentan como 2.", detalle:"1 bola · 10 lanzamientos" },
+      { tipo:'regla', icono:"cohete", titulo:"Cohete", descripcion:"Lanza la bola por encima de la cabeza con la mano hábil y recógela con la misma mano.", detalle:"1 bola · 10 veces" },
+      { tipo:'regla', icono:"mano_mano", titulo:"Cambio de pista", descripcion:"Lanza alto con la mano NO hábil y recoge con la mano hábil.", detalle:"1 bola · 5 veces" },
+      { tipo:'regla', icono:"cohete", titulo:"Cohete zurdo", descripcion:"Lanza la bola por encima de la cabeza con la mano NO hábil y recógela con la misma mano.", detalle:"1 bola · 10 veces" },
+      { tipo:'regla', icono:"flecha_arriba", titulo:"Al cielo", descripcion:"Lanza lo más alto que puedas con la mano NO hábil y recógela con la misma mano.", detalle:"1 bola · 3 veces" },
+      { tipo:'regla', icono:"mano", titulo:"Mano en el bolsillo", descripcion:"Mete la mano NO hábil en el bolsillo (o a la espalda). Lanza muy alto con la hábil y recoge.", detalle:"1 bola · 5 veces" },
+      { tipo:'regla', icono:"ojos_cerrados", titulo:"A ciegas", descripcion:"Lanza con la mano hábil a un metro de altura. Cuando la bola esté arriba, cierra los ojos y recógela.", detalle:"1 bola · 3 intentos" },
+      { tipo:'regla', icono:"palmadas", titulo:"Tres palmadas", descripcion:"Lanza alto con la mano hábil, da 3 palmadas y recoge la bola con la misma mano.", detalle:"1 bola · 5 veces" },
+      { tipo:'regla', icono:"rodilla", titulo:"Toque de rodilla", descripcion:"Lanza alto con la mano hábil, levanta una rodilla y tócala con la mano libre antes de recoger.", detalle:"1 bola · 5 veces" },
+      { tipo:'regla', icono:"espalda", titulo:"Por la espalda", descripcion:"Lanza con la mano hábil desde detrás de la espalda, por encima del hombro contrario, y recoge delante con la otra mano.", detalle:"1 bola · 5 veces" },
+      { tipo:'regla', icono:"giro", titulo:"Peonza", descripcion:"Lanza muy alto con la mano hábil, da una vuelta completa (360°) y recoge con la mano que quieras.", detalle:"1 bola · 3 veces" },
+      { tipo:'regla', icono:"flecha_abajo", titulo:"Rasante", descripcion:"Lanza con la mano hábil y recoge la bola lo más cerca del suelo que puedas, agachándote.", detalle:"1 bola · 5 veces" },
+      { tipo:'regla', icono:"caminar", titulo:"Paseo", descripcion:"Camina hacia delante mientras lanzas alto y recoges con la mano hábil, sin pararte.", detalle:"1 bola · 10 seguidas" },
+      { tipo:'regla', icono:"caminar_atras", titulo:"Cangrejo", descripcion:"Camina hacia atrás, despacio, mientras lanzas alto y recoges con la mano hábil.", detalle:"1 bola · 5 seguidas" },
+      { tipo:'regla', icono:"pie", titulo:"Equilibrista", descripcion:"Pon la bola sobre el empeine y da 5 pasos cortos sin que se caiga. Luego, con el otro pie.", detalle:"1 bola · 5 pasos por pie" },
+      { tipo:'regla', icono:"pata_coja", titulo:"Flamenco", descripcion:"Levanta una pierna, pon la bola sobre el muslo y da 3 saltos a la pata coja sin que se caiga.", detalle:"1 bola · 3 saltos" }
+      ],
+      "Nivel 2 · Dos bolas": [
+      { tipo:'regla', icono:"dos_bolas", titulo:"Gemelas", descripcion:"Una bola en cada mano. Lanza las dos a la vez, rectas, a la altura de los ojos, y recoge cada una con su misma mano.", detalle:"2 bolas · 10 veces" },
+      { tipo:'regla', icono:"intercambio", titulo:"Uno-dos", descripcion:"Lanza la bola de la mano hábil. Cuando empiece a bajar, lanza la otra. Recoge cada una con la mano contraria.", detalle:"2 bolas · 10 intercambios" },
+      { tipo:'regla', icono:"intercambio", titulo:"Sin pausa", descripcion:"Haz el Uno-dos varias veces seguidas, sin pararte entre un intercambio y el siguiente.", detalle:"2 bolas · 5 seguidos" },
+      { tipo:'regla', icono:"ducha", titulo:"La ducha", descripcion:"Lanza alta la bola de la mano hábil, pasa la otra bola a la mano hábil por abajo y recoge la primera con la mano libre.", detalle:"2 bolas · 5 veces" },
+      { tipo:'regla', icono:"cruce", titulo:"Cruce", descripcion:"Lanza las dos bolas a la vez, cruzándolas en el aire, y recoge cada una con la mano contraria.", detalle:"2 bolas · 5 veces" },
+      { tipo:'regla', icono:"palmadas", titulo:"Palmada doble", descripcion:"Lanza las dos bolas a la vez, da una palmada y recoge cada una con su misma mano.", detalle:"2 bolas · 5 veces" },
+      { tipo:'regla', icono:"cruce", titulo:"Brazos cruzados", descripcion:"Lanza alta la bola de la mano hábil, cruza los brazos por delante (sin soltar la otra) y recógela así.", detalle:"2 bolas · 5 veces" },
+      { tipo:'regla', icono:"caminar", titulo:"Paseo doble", descripcion:"Haz Uno-dos mientras caminas 5 pasos hacia delante y vuelves 5 pasos hacia atrás.", detalle:"2 bolas · ida y vuelta" },
+      { tipo:'regla', icono:"zigzag", titulo:"Zigzag", descripcion:"Haz Uno-dos mientras caminas en zigzag entre 4 conos (o 4 pasos a cada lado).", detalle:"2 bolas · 1 recorrido" },
+      { tipo:'regla', icono:"salto", titulo:"Muelle", descripcion:"Haz Uno-dos dando un saltito cada vez que lanzas.", detalle:"2 bolas · 5 intercambios" },
+      { tipo:'regla', icono:"giro", titulo:"Media vuelta", descripcion:"Lanza las dos bolas a la vez bien alto, da media vuelta (180°) y recógelas.", detalle:"2 bolas · 3 intentos" },
+      { tipo:'regla', icono:"cronometro", titulo:"Aguanta", descripcion:"Haz Uno-dos sin que se te caiga ninguna bola. Tu compañero cronometra.", detalle:"2 bolas · 20 segundos" }
+      ],
+      "Nivel 3 · Experto": [
+      { tipo:'regla', icono:"una_mano_dos", titulo:"Dos en una", descripcion:"Con las dos bolas en la mano hábil: lanza una y, cuando baje, lanza la otra. Recógelas con esa mano. Después, con la NO hábil.", detalle:"2 bolas · 5 por mano" },
+      { tipo:'regla', icono:"espalda", titulo:"Cambio por la espalda", descripcion:"Haz Uno-dos, pero la bola de la mano hábil se lanza por detrás de la espalda.", detalle:"2 bolas · 3 veces" },
+      { tipo:'regla', icono:"flecha_arriba", titulo:"Torre", descripcion:"Haz Uno-dos lanzando las bolas por encima de la cabeza.", detalle:"2 bolas · 5 seguidos" },
+      { tipo:'regla', icono:"caminar_atras", titulo:"Marcha atrás", descripcion:"Haz Uno-dos mientras caminas 5 pasos hacia atrás, sin perder el ritmo.", detalle:"2 bolas · 5 pasos" },
+      { tipo:'regla', icono:"giro", titulo:"Peonza doble", descripcion:"Haz Uno-dos seguidos mientras das una vuelta completa sobre ti mismo con pasos pequeños.", detalle:"2 bolas · 1 vuelta" },
+      { tipo:'regla', icono:"flecha_abajo", titulo:"Cuclillas", descripcion:"Haz Uno-dos agachándote poco a poco hasta acabar en cuclillas.", detalle:"2 bolas · 5 intercambios" },
+      { tipo:'regla', icono:"cronometro", titulo:"Minuto de oro", descripcion:"Haz Uno-dos sin que se te caiga ninguna bola. Tu compañero cronometra.", detalle:"2 bolas · 40 segundos" },
+      { tipo:'regla', icono:"cascada", titulo:"Flash de tres", descripcion:"Dos bolas en la mano hábil y una en la otra. Lanza las tres seguidas, alternando manos, y recógelas.", detalle:"3 bolas · 3 intentos" },
+      { tipo:'regla', icono:"cascada", titulo:"Gran final", descripcion:"¡Malabares con 3 bolas! Mantén la cascada sin que se caiga ninguna.", detalle:"3 bolas · 5 segundos" }
+      ],
+      "Retos en pareja": [
+      { tipo:'regla', icono:"parejas", titulo:"Espejo", descripcion:"A la vez, cada uno lanza y recoge su bola con la mano hábil. Contad en voz alta.", detalle:"1 bola cada uno · 10 seguidas" },
+      { tipo:'regla', icono:"pase", titulo:"Choque de derechas", descripcion:"A un paso de distancia, pasaos una bola de mano derecha a mano derecha.", detalle:"1 bola · 10 pases" },
+      { tipo:'regla', icono:"pase", titulo:"Pase cruzado", descripcion:"Frente a frente, a dos pasos. Lanzaos cada uno vuestra bola a la vez y atrapad la del compañero.", detalle:"2 bolas · 5 seguidos" },
+      { tipo:'regla', icono:"caminar", titulo:"Ida y vuelta", descripcion:"Uno lanza y recoge con la mano hábil mientras camina 3 pasos hacia su compañero y vuelve. Después cambiáis.", detalle:"1 bola · 3 + 3 lanzamientos" },
+      { tipo:'regla', icono:"parejas", titulo:"Carrusel", descripcion:"Frente a frente, caminad en círculo mientras cada uno lanza y recoge su bola con la mano hábil.", detalle:"1 bola cada uno · 1 vuelta" },
+      { tipo:'regla', icono:"diana", titulo:"Tú eliges", descripcion:"Tu compañero elige una carta del Nivel 2 para ti. ¡Tienes que superarla! Luego, al revés.", detalle:"1 carta cada uno" },
+      { tipo:'regla', icono:"doble", titulo:"Doble o nada", descripcion:"Coged dos cartas del mazo y haced las dos seguidas antes de devolverlas.", detalle:"2 cartas" },
+      { tipo:'regla', icono:"megafono", titulo:"Profe por un rato", descripcion:"Enséñale a tu compañero el truco que mejor te salga y ayúdale hasta que lo consiga.", detalle:"3 veces conseguido" },
+      { tipo:'regla', icono:"cronometro", titulo:"Contrarreloj", descripcion:"Cada uno cuenta cuántas veces lanza y recoge con la mano hábil en 30 segundos. Sumad y ¡a batir el récord!", detalle:"1 bola cada uno · 30 segundos" }
+      ]
+    };
+    Object.keys(mal).forEach(n => {
+      if (!estado.subcarpetas['Malabares'].includes(n)) estado.subcarpetas['Malabares'].push(n);
+      if (!estado.cartas['Malabares'][n]) estado.cartas['Malabares'][n] = mal[n];
+    });
+    marcar('malabares_retos');
+  }
+}
+
+function migrarRetosBadminton() {
+  if (!estado.contenidos['Bádminton']) return;
+  if (!estado.subcarpetas['Bádminton']) estado.subcarpetas['Bádminton'] = [];
+  if (estado.subcarpetas['Bádminton'].includes('Retos')) return; // ya migrado antes
+
+  estado.subcarpetas['Bádminton'].push('Retos');
+  if (!estado.cartas['Bádminton']) estado.cartas['Bádminton'] = {};
+  estado.cartas['Bádminton']['Retos'] = [
+    { tipo:'regla', icono:'raqueta', titulo:'Alterna derecha y revés', descripcion:'Golpeo de derecha, luego de revés, derecha, revés…' },
+    { tipo:'regla', icono:'mano', titulo:'Cada punto con una mano', descripcion:'Primer punto con la raqueta en la mano hábil o dominante. El siguiente punto en la no hábil o no dominante.' },
+    { tipo:'regla', icono:'flecha_abajo', titulo:'Golpes bajos', descripcion:'Solo puedo golpear el volante por debajo de mi cadera.' },
+    { tipo:'regla', icono:'flecha_arriba', titulo:'Golpeos altos', descripcion:'Solo puedo golpear el volante por encima de mis hombros (excepto en el saque).' },
+    { tipo:'regla', icono:'rodilla', titulo:'Rodillas', descripcion:'Debo golpear siempre con una rodilla apoyada en el suelo.' },
+    { tipo:'regla', icono:'pata_coja', titulo:'Pata coja', descripcion:'Solo puedo apoyar una pierna durante el intercambio.' },
+    { tipo:'regla', icono:'cabeza', titulo:'Toque en la cabeza', descripcion:'Cada vez que golpeo, debo tocarme la cabeza con la raqueta.' },
+    { tipo:'regla', icono:'estrella', titulo:'Celebración', descripcion:'Si gano el punto, tengo que hacer la celebración de "siuuu".' },
+    { tipo:'regla', icono:'doble_flecha', titulo:'Saque alternativo', descripcion:'Cada punto se saca con un golpeo: primero derecha, luego revés. Si el resultado suma par (por ejemplo, va 3-3), se saca de derecha. Si suma impar (2-1), se saca de revés.' },
+    { tipo:'regla', icono:'escalera', titulo:'Construcción', descripcion:'Antes de intentar ganar el punto debo realizar 3 golpes.' },
+    { tipo:'regla', icono:'doble', titulo:'Resto doble', descripcion:'Si gano el punto directamente con el resto (el primer toque de quien recibe el saque), vale doble.' },
+    { tipo:'regla', icono:'salto', titulo:'Canguro', descripcion:'Después de golpear, un pequeño salto.' },
+    { tipo:'regla', icono:'tortuga', titulo:'Tortuga', descripcion:'No puedo correr, solo desplazarme caminando.' },
+    { tipo:'regla', icono:'mascara', titulo:'Ninja', descripcion:'Después de golpear, debo quedarme completamente quieto hasta que el rival golpee.' },
+    { tipo:'regla', icono:'corona', titulo:'Rey', descripcion:'Antes de sacar, tengo que hacer una reverencia.' },
+    { tipo:'regla', icono:'megafono', titulo:'Narrador', descripcion:'Cada vez que golpeo, digo "¡uno!", "¡dos!", "¡tres!"…' },
+    { tipo:'regla', icono:'rayo', titulo:'Racha', descripcion:'Si gano 3 puntos seguidos, consigo 1 extra.' },
+    { tipo:'regla', icono:'diana', titulo:'Precisión', descripcion:'Si el volante cae en una línea, vale 2.' },
+    { tipo:'regla', icono:'doble', titulo:'Este vale doble', descripcion:'El jugador que saca decide si ese punto vale doble y se lo dice al compañero antes de sacar.' },
+  ];
+}
+let historial = [];
+let historialFuturo = [];
+function registrarCambio() {
+  historial.push(JSON.stringify(estado));
+  if (historial.length > 50) historial.shift();
+  historialFuturo = [];
+}
+function deshacer() {
+  if (!historial.length) return;
+  historialFuturo.push(JSON.stringify(estado));
+  estado = JSON.parse(historial.pop());
+  editando = null;
+  guardarEstado(); render();
+}
+function rehacer() {
+  if (!historialFuturo.length) return;
+  historial.push(JSON.stringify(estado));
+  estado = JSON.parse(historialFuturo.pop());
+  editando = null;
+  guardarEstado(); render();
+}
+document.addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); deshacer(); }
+  else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); rehacer(); }
+});
+
+async function guardarEstado() {
+  const json = JSON.stringify(estado);
+  let ok = false;
+  try { localStorage.setItem(CLAVE_ESTADO, json); ok = true; } catch (e) { console.error('No se pudo guardar en el navegador', e); }
+  try { if (window.storage) { await window.storage.set(CLAVE_ESTADO, json, false); ok = true; } } catch (e) {}
+  if (!ok) console.warn('Los cambios no se están guardando en este navegador');
+}
+function nombresOrdenados() {
+  return Object.keys(estado.contenidos).sort((a,b) => a.localeCompare(b, 'es', { sensitivity:'base' }));
+}
+
+function iniciarResize(lado, ev) {
+  ev.preventDefault();
+  const panel = lado === 'izq' ? document.getElementById('contenidos') : document.getElementById('col-editor');
+  const startX = ev.clientX;
+  const startWidth = panel.getBoundingClientRect().width;
+  function onMove(e) {
+    let delta = e.clientX - startX;
+    if (lado === 'der') delta = -delta;
+    let nuevo = Math.max(120, Math.min(560, startWidth + delta));
+    if (lado === 'izq') { document.documentElement.style.setProperty('--w-izq', nuevo + 'px'); }
+    else { document.documentElement.style.setProperty('--w-der', nuevo + 'px'); }
+  }
+  function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+document.getElementById('resizer-izq').addEventListener('mousedown', (e) => iniciarResize('izq', e));
+document.getElementById('resizer-der').addEventListener('mousedown', (e) => iniciarResize('der', e));
+
+function toggleColapsarIzq() {
+  colapsadaIzq = !colapsadaIzq;
+  const el = document.getElementById('contenidos');
+  el.classList.toggle('colapsada', colapsadaIzq);
+  document.getElementById('btn-colapsar-izq').textContent = colapsadaIzq ? '»' : '«';
+  renderSidebar();
+}
+function toggleEditorCerrado(forzar) {
+  editorCerrado = (forzar !== undefined) ? forzar : !editorCerrado;
+  document.getElementById('col-editor').classList.toggle('cerrada', editorCerrado);
+  document.getElementById('resizer-der').style.display = editorCerrado ? 'none' : '';
+  document.getElementById('btn-reabrir-editor').style.display = editorCerrado ? 'block' : 'none';
+}
+
+const LOGO_APP_DEFAULT_SVG = '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="10" width="26" height="34" rx="5" fill="none" stroke="#2d6e4e" stroke-width="3" transform="rotate(-8 19 27)"/><rect x="16" y="8" width="26" height="34" rx="5" fill="#2d6e4e"/><circle cx="29" cy="25" r="5" fill="white"/></svg>';
+function renderLogo() {
+  const el = document.getElementById('logo-app');
+  el.classList.remove('mascara');
+  el.style.webkitMaskImage = ''; el.style.maskImage = ''; el.style.background = '';
+  el.innerHTML = estado.logoDataUrl ? `<img src="${estado.logoDataUrl}">` : LOGO_APP_DEFAULT_SVG;
+}
+function subirLogo(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { registrarCambio(); estado.logoDataUrl = reader.result; guardarEstado(); renderLogo(); };
+  reader.readAsDataURL(file);
+}
+
+function crearContenido() {
+  registrarCambio();
+  const input = document.getElementById('input-nuevo-contenido');
+  const nombre = capitalizar(input.value);
+  if (!nombre || estado.contenidos[nombre]) return;
+  const usados = Object.keys(estado.contenidos).length;
+  estado.contenidos[nombre] = { color: PALETA[usados % PALETA.length], icono: null };
+  estado.subcarpetas[nombre] = [];
+  estado.cartas[nombre] = {};
+  contenidoActivo = nombre;
+  subcarpetaActiva = null;
+  input.value = '';
+  guardarEstado();
+  render();
+}
+function seleccionarContenido(nombre) {
+  contenidoActivo = nombre;
+  const subs = estado.subcarpetas[nombre] || [];
+  subcarpetaActiva = subs[0] || null;
+  editando = null;
+  render();
+}
+function seleccionarSubcarpeta(nombre) {
+  subcarpetaActiva = nombre;
+  editando = null;
+  render();
+}
+function crearSubcarpeta() {
+  registrarCambio();
+  const input = document.getElementById('input-nueva-subcarpeta');
+  const nombre = capitalizar(input.value);
+  if (!nombre) return;
+  if (!estado.subcarpetas[contenidoActivo]) estado.subcarpetas[contenidoActivo] = [];
+  if (estado.subcarpetas[contenidoActivo].includes(nombre)) return;
+  estado.subcarpetas[contenidoActivo].push(nombre);
+  if (!estado.cartas[contenidoActivo]) estado.cartas[contenidoActivo] = {};
+  estado.cartas[contenidoActivo][nombre] = [];
+  subcarpetaActiva = nombre;
+  input.value = '';
+  guardarEstado();
+  render();
+}
+function cambiarColorContenido(nombre, hex) {
+  registrarCambio();
+  estado.contenidos[nombre].color = hex;
+  guardarEstado();
+  render();
+}
+function borrarContenido(nombre) {
+  if (!confirm(`¿Borrar el contenido "${nombre}" y todas sus cartas? (Ctrl+Z para deshacer)`)) return;
+  registrarCambio();
+  delete estado.contenidos[nombre];
+  delete estado.subcarpetas[nombre];
+  delete estado.cartas[nombre];
+  if (contenidoActivo === nombre) {
+    const nombres = nombresOrdenados();
+    contenidoActivo = nombres[0] || null;
+    const subs = contenidoActivo ? (estado.subcarpetas[contenidoActivo] || []) : [];
+    subcarpetaActiva = subs[0] || null;
+    editando = null;
+  }
+  guardarEstado();
+  render();
+}
+function borrarSubcarpeta(nombreContenido, nombreSub) {
+  if (!confirm(`¿Borrar la subcarpeta "${nombreSub}" y todas sus cartas? (Ctrl+Z para deshacer)`)) return;
+  registrarCambio();
+  estado.subcarpetas[nombreContenido] = (estado.subcarpetas[nombreContenido]||[]).filter(s => s !== nombreSub);
+  if (estado.cartas[nombreContenido]) delete estado.cartas[nombreContenido][nombreSub];
+  if (contenidoActivo === nombreContenido && subcarpetaActiva === nombreSub) {
+    subcarpetaActiva = (estado.subcarpetas[nombreContenido]||[])[0] || null;
+    editando = null;
+  }
+  guardarEstado();
+  render();
+}
+function cartasActuales() {
+  if (!contenidoActivo || !subcarpetaActiva) return [];
+  return (estado.cartas[contenidoActivo] && estado.cartas[contenidoActivo][subcarpetaActiva]) || [];
+}
+
+function render() { renderLogo(); renderSidebar(); renderPrincipal(); renderEditor(); }
+
+function renderSidebar() {
+  const cont = document.getElementById('lista-scroll');
+  cont.innerHTML = '';
+  nombresOrdenados().forEach(nombre => {
+    const totalCartas = Object.values((estado.cartas[nombre])||{}).reduce((a,l)=>a+l.length,0);
+    const item = document.createElement('div');
+    item.className = 'contenido-item' + (nombre === contenidoActivo ? ' activo' : '');
+    item.onclick = () => seleccionarContenido(nombre);
+    const idInput = 'color-' + nombre.replace(/[^a-zA-Z0-9]/g,'_');
+    item.innerHTML = `<span class="contenido-dot" style="background:${estado.contenidos[nombre].color}" onclick="event.stopPropagation(); document.getElementById('${idInput}').click()"></span>
+      <span class="nombre">${nombre}</span><span class="contar">${totalCartas}</span>
+      <button class="btn-borrar-mini" title="Borrar contenido" onclick="event.stopPropagation(); borrarContenido('${nombre}')">🗑</button>
+      <input type="color" id="${idInput}" style="display:none" value="${estado.contenidos[nombre].color}" onclick="event.stopPropagation()" oninput="cambiarColorContenido('${nombre}', this.value)">`;
+    cont.appendChild(item);
+
+    if (nombre === contenidoActivo && !colapsadaIzq) {
+      const subs = estado.subcarpetas[nombre] || [];
+      const listaSub = document.createElement('div');
+      listaSub.className = 'subcarpeta-lista';
+      subs.forEach((s, i) => {
+        const nCartas = ((estado.cartas[nombre]||{})[s]||[]).length;
+        const sd = document.createElement('div');
+        sd.className = 'subcarpeta-item' + (s === subcarpetaActiva ? ' activa' : '');
+        sd.onclick = (ev) => { ev.stopPropagation(); seleccionarSubcarpeta(s); };
+        sd.innerHTML = `${String(i+1).padStart(2,'0')}. ${s} <span class="contar">${nCartas}</span>
+          <button class="btn-borrar-mini" title="Borrar subcarpeta" onclick="event.stopPropagation(); borrarSubcarpeta('${nombre}', '${s}')">🗑</button>`;
+        listaSub.appendChild(sd);
+      });
+      cont.appendChild(listaSub);
+      const nueva = document.createElement('div');
+      nueva.className = 'subcarpeta-nueva';
+      nueva.innerHTML = `<input type="text" id="input-nueva-subcarpeta" placeholder="Nueva subcarpeta…" onclick="event.stopPropagation()">
+        <button onclick="event.stopPropagation(); crearSubcarpeta()">+</button>`;
+      cont.appendChild(nueva);
+    }
+  });
+}
+
+function idFormateado(i) { return String(i + 1).padStart(3, '0'); }
+
+function dibujoRuta(carta) {
+  const sec = carta.secuencia || [];
+  const enUso = new Set(sec);
+  const lineas = [];
+  for (let k = 0; k < sec.length - 1; k++) {
+    const a = GRID[sec[k]], b = GRID[sec[k+1]];
+    lineas.push(`<polyline class="ruta-linea" points="${a[0]},${a[1]} ${b[0]},${b[1]}" />`);
+  }
+  const base = GRID.map((p, i) => enUso.has(i) ? '' : `<circle class="ruta-punto--guia" cx="${p[0]}" cy="${p[1]}" r="2.4"/>`).join('');
+  const puntos = sec.map(i => { const p = GRID[i]; return `<circle class="ruta-punto" cx="${p[0]}" cy="${p[1]}" r="3.1"/>`; }).join('');
+  return `<svg viewBox="0 0 100 100">${base}${lineas.join('')}${puntos}</svg>`;
+}
+
+function svgCarta(carta) {
+  if (carta.tipo === 'ruta') return `<div class="carta__cuerpo"><div class="carta__dibujo">${dibujoRuta(carta)}</div></div>`;
+  const cuerpoIcono = carta.imagenDataUrl
+    ? `<img src="${carta.imagenDataUrl}" alt="">`
+    : `<svg viewBox="0 0 100 100" stroke-width="${ICONO_STROKE_WIDTH}" stroke-linecap="round" stroke-linejoin="round">${ICONOS[carta.icono]||''}</svg>`;
+  return `<div class="carta__cuerpo">
+    <div class="carta__icono-grande-bg"><div class="carta__icono-grande">${cuerpoIcono}</div></div>
+    <div class="carta__titulo-regla">${escapeHtml(carta.titulo||'')}</div>
+    <div class="carta__descripcion">${escapeHtml(carta.descripcion||'')}</div>
+    ${carta.detalle ? `<div class="carta__detalle">${escapeHtml(carta.detalle)}</div>` : ''}
+  </div>`;
+}
+
+const ICONO_MINI_GENERICO = '<svg viewBox="0 0 24 24"><path d="M12 2c-4 3-7 7-7 11a7 7 0 0 0 14 0c0-4-3-8-7-11z"/></svg>';
+// El símbolo de una colección puede ser una imagen subida (data:...) o un icono de la biblioteca ('lib:clave')
+function insigniaHTML(icono, grosor) {
+  if (!icono) return ICONO_MINI_GENERICO;
+  if (icono.startsWith('lib:')) {
+    const k = icono.slice(4);
+    return `<svg class="linea" viewBox="0 0 100 100" fill="none" stroke="var(--accent)" stroke-width="${grosor||8}" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%;">${ICONOS[k]||''}</svg>`;
+  }
+  return `<img src="${icono}" style="width:100%;height:100%;object-fit:contain;">`;
+}
+function htmlTarjeta(carta, indice, color, iconoContenido, clicable, resaltar) {
+  const insignia = insigniaHTML(iconoContenido, 8);
+  const cab = `<div class="carta__cabecera">
+      <div class="carta__numero">${idFormateado(indice)}</div>
+      <div class="carta__icono-mini">${insignia}</div>
+      ${carta.tipo === 'ruta' ? `<div class="carta__titulo">${escapeHtml(carta.categoria_label||'')}</div>` : ''}
+    </div>`;
+  const click = clicable ? `onclick="abrirEditor(${indice})"` : '';
+  const clase = 'carta carta--' + carta.tipo + (resaltar ? ' resaltada' : '');
+  return `<div class="${clase}" style="--accent:${color}" ${click}>${cab}${svgCarta(carta)}</div>`;
+}
+
+function htmlHoja(cartas, color, iconoContenido, indiceResaltado) {
+  const porHoja = CARTAS_POR_HOJA;
+  const numHojas = Math.max(1, Math.ceil(cartas.length / porHoja));
+  let html = '';
+  for (let h = 0; h < numHojas; h++) {
+    html += '<div class="hoja-preview">';
+    for (let i = 0; i < porHoja; i++) {
+      const indice = h * porHoja + i;
+      if (indice < cartas.length) html += htmlTarjeta(cartas[indice], indice, color, iconoContenido, true, indice === indiceResaltado);
+      else if (indice === cartas.length) html += `<div class="carta-boton-nueva" onclick="abrirEditor(null)">+ Nueva carta</div>`;
+      else html += `<div class="carta vacia">vacío</div>`;
+    }
+    html += '</div>';
+  }
+  return { html, extraPagina: cartas.length % porHoja === 0 };
+}
+
+function escapeHtml(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function primerHojaHTML(htmlCompleto) {
+  const div = document.createElement('div');
+  div.innerHTML = htmlCompleto;
+  return div.querySelector('.hoja-preview') ? div.querySelector('.hoja-preview').innerHTML : '';
+}
+
+function renderPrincipal() {
+  const cabecera = document.getElementById('cabecera-contenido');
+  const heroWrap = document.getElementById('hero-wrap');
+  const contenedor = document.getElementById('hojas-contenedor');
+
+  if (!contenidoActivo) {
+    cabecera.innerHTML = '<h2>Crea un contenido para empezar</h2>';
+    heroWrap.innerHTML = ''; contenedor.innerHTML = '';
+    return;
+  }
+  const color = estado.contenidos[contenidoActivo].color;
+  const iconoContenido = estado.contenidos[contenidoActivo].icono || null;
+  cabecera.innerHTML = `
+    <h2>${contenidoActivo}${subcarpetaActiva ? ` <span class="sub">— ${subcarpetaActiva}</span>` : ''}</h2>
+    <div id="swatch-color" style="background:${color}" onclick="document.getElementById('picker-color-cab').click()"></div>
+    <input type="color" id="picker-color-cab" value="${color}" oninput="cambiarColorContenido('${contenidoActivo}', this.value)">
+    <div id="swatch-icono" title="Cambiar el símbolo de esta colección" style="--accent:${color}" onclick="pickerSimbolo=!pickerSimbolo; renderPrincipal();">${insigniaHTML(iconoContenido, 7)}</div>
+    <button class="btn-cambiar-simbolo" onclick="pickerSimbolo=!pickerSimbolo; renderPrincipal();">✎ Símbolo</button>
+    <input type="file" id="input-icono-contenido" accept="image/png,image/jpeg,image/svg+xml" style="display:none" onchange="subirIconoContenido(event)">
+    ${pickerSimbolo ? htmlPickerSimbolo(iconoContenido, color) : ''}
+  `;
+
+  if (!subcarpetaActiva) {
+    heroWrap.innerHTML = '';
+    contenedor.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">Crea una subcarpeta a la izquierda (por ejemplo "Rutas espaciales" o "Retos") para empezar a añadir cartas.</p>`;
+    return;
+  }
+
+  const cartas = cartasActuales();
+  const indiceEditando = (editando && !editando.esNuevo) ? editando.indice : (editando && editando.esNuevo ? cartas.length : -1);
+  const cartasConHero = cartas.slice();
+  if (editando) {
+    const cartaHero = vistaPreviaDesdeEditor();
+    if (editando.esNuevo) cartasConHero.push(cartaHero); else cartasConHero[editando.indice] = cartaHero;
+  }
+
+  if (editando && modoVista === 'legend') {
+    const cartaHero = vistaPreviaDesdeEditor();
+    const { html } = htmlHoja(cartasConHero, color, iconoContenido, indiceEditando);
+    heroWrap.innerHTML = `
+      <div>
+        <div class="hero-etiqueta">Editando carta ${idFormateado(indiceEditando)}</div>
+        <div class="hero-marco"><div style="position:relative;width:60mm;height:60mm;">
+          ${htmlTarjeta(cartaHero, indiceEditando, color, iconoContenido, false, false)}
+        </div></div>
+      </div>
+      <div class="leyenda-caja">
+        <div class="hero-etiqueta">Hoja completa</div>
+        <div class="leyenda-marco"><div class="hoja-preview">${primerHojaHTML(html)}</div></div>
+        <button class="btn-ampliar" title="Ver hoja completa" onclick="modoVista='completa'; renderPrincipal();">⤢</button>
+      </div>
+    `;
+    contenedor.innerHTML = '';
+  } else if (editando && modoVista === 'completa') {
+    heroWrap.innerHTML = `<button class="btn-volver-leyenda no-print" onclick="modoVista='legend'; renderPrincipal();">← Volver a vista reducida</button>`;
+    const { html } = htmlHoja(cartasConHero, color, iconoContenido, indiceEditando);
+    contenedor.innerHTML = html;
+  } else {
+    heroWrap.innerHTML = '';
+    const { html, extraPagina } = htmlHoja(cartas, color, iconoContenido, -1);
+    contenedor.innerHTML = html + (extraPagina ? `<button class="no-print" style="margin-top:10px;padding:9px 14px;border:2px dashed var(--line);border-radius:8px;background:transparent;cursor:pointer;color:var(--ink-soft);" onclick="abrirEditor(null)">+ Nueva carta (empezará una hoja nueva)</button>` : '');
+    if (incluirReverso) contenedor.innerHTML += htmlReversoHojas(cartas.length, color, iconoContenido, contenidoActivo);
+  }
+}
+
+function htmlPickerSimbolo(actual, color) {
+  return `<div id="picker-simbolo" style="--accent:${color}">
+    <div class="picker-titulo">Símbolo de la colección (aparece junto al número de cada carta)</div>
+    <div class="icono-grid picker-grid">${Object.keys(ICONOS).map(k => `
+      <div class="icono-opcion ${actual==='lib:'+k?'activo':''}" title="${k.replace(/_/g,' ')}" onclick="elegirSimbolo('${k}')">
+        <svg viewBox="0 0 100 100" stroke-width="${ICONO_STROKE_WIDTH}" stroke-linecap="round" stroke-linejoin="round">${ICONOS[k]}</svg>
+      </div>`).join('')}</div>
+    <div class="picker-acciones">
+      <button onclick="document.getElementById('input-icono-contenido').click()">⬆️ Subir mi imagen (PNG, JPG o SVG)</button>
+      ${actual ? `<button class="btn-quitar-icono" onclick="quitarIconoContenido()">Quitar símbolo</button>` : ''}
+      <button onclick="pickerSimbolo=false; renderPrincipal();">Cerrar</button>
+    </div>
+  </div>`;
+}
+function elegirSimbolo(k) {
+  registrarCambio();
+  estado.contenidos[contenidoActivo].icono = 'lib:' + k;
+  pickerSimbolo = false;
+  guardarEstado(); render();
+}
+function subirIconoContenido(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    registrarCambio();
+    estado.contenidos[contenidoActivo].icono = reader.result;
+    pickerSimbolo = false;
+    guardarEstado(); render();
+  };
+  reader.readAsDataURL(file);
+}
+function quitarIconoContenido() {
+  registrarCambio();
+  estado.contenidos[contenidoActivo].icono = null;
+  guardarEstado(); render();
+}
+
+function vistaPreviaDesdeEditor() {
+  const c = Object.assign({}, editando);
+  delete c.esNuevo; delete c.indice;
+  return c;
+}
+
+function abrirEditor(indice) {
+  if (!subcarpetaActiva) return;
+  const cartas = cartasActuales();
+  modoVista = 'legend';
+  if (indice === null) {
+    const ultima = cartas[cartas.length - 1];
+    editando = {
+      esNuevo: true,
+      tipo: ultima ? ultima.tipo : 'ruta',
+      categoria_label: ultima ? (ultima.categoria_label || '') : '',
+      secuencia: [],
+      icono: ultima ? (ultima.icono || 'memoria_visual') : 'memoria_visual',
+      titulo: ultima ? (ultima.titulo || '') : '',
+      descripcion: ultima ? (ultima.descripcion || '') : '',
+      detalle: ultima ? (ultima.detalle || '') : '',
+      imagenDataUrl: null,
+    };
+  } else {
+    editando = Object.assign({ esNuevo: false, indice }, JSON.parse(JSON.stringify(cartas[indice])));
+    if (editando.tipo === 'ruta' && !editando.secuencia) editando.secuencia = [];
+  }
+  render();
+}
+function cerrarEditor() { editando = null; render(); }
+function cambiarTipoEditor(tipo) {
+  editando.tipo = tipo;
+  if (tipo === 'ruta' && !editando.secuencia) editando.secuencia = [];
+  render();
+}
+
+function renderEditor() {
+  const panel = document.getElementById('editor');
+  if (!editando) { panel.innerHTML = '<div id="editor-vacio">Selecciona o crea una carta<br>para editarla aquí.</div>'; return; }
+
+  let html = `<div id="editor-cabecera"><h3>${editando.esNuevo ? 'Nueva carta' : 'Editar carta'}</h3>
+      <button id="btn-cerrar-editor" title="Cerrar panel" onclick="toggleEditorCerrado(true)">✕</button>
+    </div>
+    <div class="tipo-toggle">
+      <button class="${editando.tipo==='ruta'?'activo':''}" onclick="cambiarTipoEditor('ruta')">Ruta (dibujo)</button>
+      <button class="${editando.tipo==='regla'?'activo':''}" onclick="cambiarTipoEditor('regla')">Regla (icono+texto)</button>
+    </div>`;
+
+  if (editando.tipo === 'ruta') {
+    html += `
+      <label>Título de categoría (arriba a la derecha)</label>
+      <input type="text" value="${escapeHtml(editando.categoria_label)}" oninput="editando.categoria_label=this.value; renderPrincipal();">
+      <label>Toca los conos en el orden del recorrido</label>
+      <div id="lienzo-wrap">${lienzoSVG()}</div>
+      <div class="lienzo-botones">
+        <button onclick="deshacerPunto()">↩️ Deshacer último</button>
+        <button onclick="vaciarDibujo()">🗑️ Vaciar recorrido</button>
+      </div>
+      <label>Generar recorrido aleatorio</label>
+      <div class="lienzo-botones">
+        <button onclick="generarAleatorio('bajo')">Bajo</button>
+        <button onclick="generarAleatorio('medio')">Medio</button>
+        <button onclick="generarAleatorio('alto')">Alto</button>
+      </div>
+      <p style="font-size:11px;color:#777;margin-top:8px;">Los 9 conos son siempre los mismos. Toca en orden para crear el camino (no se puede repetir un cono); toca el último tocado para deshacerlo.</p>
+    `;
+  } else {
+    html += `
+      <label>Icono</label>
+      <div class="icono-grid">${Object.keys(ICONOS).map(k => `
+        <div class="icono-opcion ${(editando.icono===k && !editando.imagenDataUrl)?'activo':''}" onclick="elegirIcono('${k}')">
+          <svg viewBox="0 0 100 100" stroke-width="${ICONO_STROKE_WIDTH}" stroke-linecap="round" stroke-linejoin="round">${ICONOS[k]}</svg>
+        </div>`).join('')}</div>
+      <label>O sube tu propia imagen (PNG con fondo transparente o JPG)</label>
+      <input type="file" accept="image/png,image/jpeg" onchange="subirImagen(event)">
+      ${editando.imagenDataUrl ? `<div id="imagen-subida-prev"><img src="${editando.imagenDataUrl}"><button onclick="quitarImagen()">Quitar imagen</button></div>` : ''}
+      <label>Título</label>
+      <input type="text" value="${escapeHtml(editando.titulo)}" oninput="editando.titulo=this.value; renderPrincipal();">
+      <label>Descripción</label>
+      <textarea oninput="editando.descripcion=this.value; renderPrincipal();">${escapeHtml(editando.descripcion)}</textarea>
+      <label>Detalle (opcional; p. ej. «1 bola · 10 veces»)</label>
+      <input type="text" value="${escapeHtml(editando.detalle||'')}" oninput="editando.detalle=this.value; renderPrincipal();">
+    `;
+  }
+
+  html += `<div id="editor-acciones">
+      <button onclick="cerrarEditor()">Cancelar</button>
+      <button class="guardar" onclick="guardarCarta()">Guardar</button>
+    </div>`;
+  if (!editando.esNuevo) html += `<button id="btn-borrar" onclick="borrarCarta()">Eliminar esta carta</button>`;
+  panel.innerHTML = html;
+}
+
+function elegirIcono(k) { editando.icono = k; editando.imagenDataUrl = null; renderEditor(); renderPrincipal(); }
+function subirImagen(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { editando.imagenDataUrl = reader.result; renderEditor(); renderPrincipal(); };
+  reader.readAsDataURL(file);
+}
+function quitarImagen() { editando.imagenDataUrl = null; renderEditor(); renderPrincipal(); }
+
+function lienzoSVG() {
+  return `<svg viewBox="0 0 100 100">
+    <rect x="0" y="0" width="100" height="100" fill="#fafaf7"/>
+    ${dibujoRuta({secuencia: editando.secuencia}).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')}
+    ${GRID.map((p, i) => `<circle class="lienzo-punto" cx="${p[0]}" cy="${p[1]}" r="6" fill="transparent" style="cursor:pointer" onclick="alternarPunto(${i})"/>`).join('')}
+  </svg>`;
+}
+function alternarPunto(i) {
+  const sec = editando.secuencia;
+  if (sec.length && sec[sec.length - 1] === i) { sec.pop(); renderEditor(); renderPrincipal(); return; }
+  if (sec.includes(i)) { return; } // no se puede pasar dos veces por el mismo cono
+  sec.push(i);
+  renderEditor(); renderPrincipal();
+}
+function generarAleatorio(nivel) {
+  const rangos = { bajo: [3,4], medio: [5,6], alto: [7,9] };
+  const [min, max] = rangos[nivel];
+  const n = min + Math.floor(Math.random() * (max - min + 1));
+  const indices = [0,1,2,3,4,5,6,7,8];
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  editando.secuencia = indices.slice(0, n);
+  renderEditor(); renderPrincipal();
+}
+function deshacerPunto() { editando.secuencia.pop(); renderEditor(); renderPrincipal(); }
+function vaciarDibujo() { editando.secuencia = []; renderEditor(); renderPrincipal(); }
+
+function guardarCarta() {
+  registrarCambio();
+  const datos = Object.assign({}, editando);
+  delete datos.esNuevo; delete datos.indice;
+  if (!estado.cartas[contenidoActivo][subcarpetaActiva]) estado.cartas[contenidoActivo][subcarpetaActiva] = [];
+  if (editando.esNuevo) estado.cartas[contenidoActivo][subcarpetaActiva].push(datos);
+  else estado.cartas[contenidoActivo][subcarpetaActiva][editando.indice] = datos;
+  guardarEstado();
+  editando = null;
+  render();
+}
+function borrarCarta() {
+  registrarCambio();
+  estado.cartas[contenidoActivo][subcarpetaActiva].splice(editando.indice, 1);
+  guardarEstado();
+  editando = null;
+  render();
+}
+
+function slug(s) { return (s||'sin_titulo').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+function yamlDeCarta(carta, id, color) {
+  if (carta.tipo === 'ruta') {
+    const puntos = (carta.secuencia||[]).map(i => GRID[i]);
+    const trayecto = '    - [' + puntos.map(p => `[${p[0]},${p[1]}]`).join(',') + ']';
+    const guias = GRID.map(p => `  - [${p[0]},${p[1]}]`).join('\n');
+    return `id: "${id}"\ncolor: "${color}"\ntipo: ruta\ncategoria_label: "${(carta.categoria_label||'').replace(/"/g,'')}"\ntrayectos:\n${trayecto}\npuntos_guia:\n${guias}\n`;
+  }
+  const imagenLinea = carta.imagenDataUrl ? `imagen_incrustada: si\n` : `icono: ${carta.icono}.svg\n`;
+  return `id: "${id}"\ncolor: "${color}"\ntipo: regla\n${imagenLinea}titulo: "${(carta.titulo||'').replace(/"/g,'')}"\ndescripcion: "${(carta.descripcion||'').replace(/"/g,'')}"\n${carta.detalle ? `detalle: "${carta.detalle.replace(/"/g,'')}"\n` : ''}`;
+}
+async function exportarYAML() {
+  const zip = new JSZip();
+  Object.keys(estado.contenidos).forEach(nombre => {
+    const color = estado.contenidos[nombre].color;
+    const subs = estado.subcarpetas[nombre] || [];
+    subs.forEach((sub, si) => {
+      const cartas = (estado.cartas[nombre] && estado.cartas[nombre][sub]) || [];
+      cartas.forEach((carta, i) => {
+        const id = idFormateado(i);
+        const rutaCarpeta = `data/${slug(nombre)}/${String(si+1).padStart(2,'0')}_${slug(sub)}`;
+        zip.file(`${rutaCarpeta}/${id}_${slug(carta.categoria_label || carta.titulo)}.yaml`, yamlDeCarta(carta, id, color));
+        if (carta.imagenDataUrl) {
+          const base64 = carta.imagenDataUrl.split(',')[1];
+          const ext = carta.imagenDataUrl.includes('image/png') ? 'png' : 'jpg';
+          zip.file(`${rutaCarpeta}/${id}_imagen.${ext}`, base64, { base64: true });
+        }
+      });
+    });
+  });
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cardio_cartas.zip';
+  a.click();
+}
+
+cargarEstado();
+</script>
+</body>
+</html>
